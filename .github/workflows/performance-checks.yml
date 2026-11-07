@@ -1,0 +1,84 @@
+name: Performance checks
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/performance-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t menhity-performance backend
+      - name: Validate Apache config and start isolated SQLite app
+        run: |
+          docker run --rm -e PORT=8080 --entrypoint apache2ctl menhity-performance -t
+          docker run -d --name menhity-check -p 8080:8080 \
+            -e APP_KEY=base64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
+            -e APP_ENV=testing -e APP_DEBUG=false -e PORT=8080 \
+            -e FRONTEND_URL=https://bousla.pages.dev \
+            -e DB_CONNECTION=sqlite -e DB_DATABASE=/app/database/check.sqlite \
+            -e CACHE_STORE=file -e SESSION_DRIVER=file -e LOG_CHANNEL=stderr \
+            --entrypoint sh menhity-performance -c \
+            'ln -s /etc/apache2/mods-available/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.load && touch /app/database/check.sqlite && chown -R www-data:www-data /app/database && exec ./docker-entrypoint.sh'
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/up > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/v1/stats
+          curl -fsS http://localhost:8080/api/v1/meta > /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' http://localhost:8080/api/v1/auth/me)" = 401
+      - name: Cache preflight checks only for allowed frontend origins
+        run: |
+          for origin in https://bousla.pages.dev https://preview.bousla.pages.dev; do
+            curl -fsS -X OPTIONS -D /tmp/cors-headers -o /dev/null \
+              -H "Origin: $origin" -H 'Access-Control-Request-Method: GET' \
+              -H 'Access-Control-Request-Headers: authorization' \
+              http://localhost:8080/api/v1/scholarships
+            tr -d '\r' < /tmp/cors-headers > /tmp/cors-clean
+            grep -iFx "Access-Control-Allow-Origin: $origin" /tmp/cors-clean
+            grep -iFx 'Access-Control-Max-Age: 600' /tmp/cors-clean
+          done
+          curl -fsS -X OPTIONS -D /tmp/cors-denied -o /dev/null \
+            -H 'Origin: https://bousla.pages.dev.example.com' \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization' \
+            http://localhost:8080/api/v1/scholarships
+          if grep -qi '^Access-Control-Allow-Origin:' /tmp/cors-denied; then exit 1; fi
+      - name: A slow PHP request must not block health checks
+        run: |
+          docker exec menhity-check sh -c 'printf "%s" "<?php file_put_contents(\"/tmp/slow-started\", \"1\"); sleep(5); echo \"done\";" > public/concurrency-check.php'
+          curl -fsS http://localhost:8080/concurrency-check.php > /tmp/slow-result &
+          slow_pid=$!
+          for attempt in $(seq 1 30); do
+            if docker exec menhity-check test -f /tmp/slow-started; then break; fi
+            sleep 0.1
+          done
+          docker exec menhity-check test -f /tmp/slow-started
+          curl --max-time 2 -fsS http://localhost:8080/up > /dev/null
+          wait "$slow_pid"
+          test "$(cat /tmp/slow-result)" = done
+      - name: Container logs
+        if: always()
+        run: docker logs menhity-check || true

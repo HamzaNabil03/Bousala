@@ -1,0 +1,41 @@
+# ---- عام ----
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.swp
+
+# ---- أسرار وملفات بيئة محلية ----
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ---- قواعد بيانات وبيانات مستخدمين محلية ----
+*.sqlite
+*.sqlite3
+*.db
+**/.composer-cache/
+**/.composer-home/
+**/.phpunit.cache/
+coverage/
+backend/storage/app/private/**
+!backend/storage/app/private/.gitignore
+backend/storage/app/public/**
+!backend/storage/app/public/.gitignore
+backend/storage/framework/uploads/**
+!backend/storage/framework/uploads/.gitignore
+
+# ---- الواجهة الأمامية ----
+node_modules/
+dist/
+.vite/
+
+# ---- لقطات فحص الدخان ----
+.smoke-shots/

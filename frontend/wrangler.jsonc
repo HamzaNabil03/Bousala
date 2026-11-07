@@ -1,0 +1,14 @@
+{
+  // إعداد نشر واجهة بَوْصلة على Cloudflare Workers.
+  // الواجهة ملفات ثابتة بعد البناء، وWorkers يقدّمها من مجلد dist مباشرة.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bousla",
+  "compatibility_date": "2026-09-15",
+
+  "assets": {
+    "directory": "./dist",
+    // تطبيق أحادي الصفحة: أي مسار غير موجود يُقدَّم له index.html
+    // فيتكفّل React Router بالتوجيه — بدونه تحديث أي صفحة داخلية يعطي 404.
+    "not_found_handling": "single-page-application"
+  }
+}

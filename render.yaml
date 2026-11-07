@@ -1,0 +1,47 @@
+# مخطّط نشر بَوْصلة على Render — الخطة المجانية
+# قاعدة البيانات خارجية (Neon) فلا تنتهي صلاحيتها بعد 90 يوماً كقواعد Render المجانية.
+
+services:
+  - type: web
+    name: bousla-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: بَوْصلة
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_LOCALE
+        value: ar
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: FILESYSTEM_DISK
+        value: public
+      # القيم التالية تُضبط يدوياً من لوحة Render:
+      #   APP_KEY        ← ناتج php artisan key:generate --show
+      #   APP_URL        ← https://bousla-api.onrender.com
+      #   DB_URL         ← رابط الاتصال من Neon
+      #   FRONTEND_URL   ← https://bousla.pages.dev
+      #   ANTHROPIC_API_KEY (اختياري)
+      - key: APP_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: DB_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
